@@ -5,7 +5,7 @@ Implemented a neural network with various configurations. The best performance i
 Over the course of implementing this algorithm, I've realised that SGD is much more faster than mini batch or batch gradient descent
 
 Credits - 
-MNSIT Loader from http://neuralnetworksanddeeplearning.com/chap1.html
-deeplearning.ai (Video lectures for deep learning)
+* MNSIT Loader from http://neuralnetworksanddeeplearning.com/chap1.html
+* https://deeplearning.ai (Video lectures for deep learning)
 
 
