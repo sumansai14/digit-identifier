@@ -1,5 +1,5 @@
-import numpy as np
 import random
+import numpy as np
 
 
 def sigmoid(z):
@@ -13,143 +13,107 @@ def sigmoid_prime(z):
 
 
 class Network(object):
+    """
+    The network object takes in the layer diemensions and initalizes the weights.
+    The imputs are passed in the train method
+    """
     def __init__(self, layer_dims):
-        """
-        This is the class for the network object.
-
-        The way network object is created is, it takes the hyperparameters and constructs the corresponding network
-        Let's start with the following hyperparameters
-        :layer_dims - diemensions of the no. of hidden layers
-        :learning_rate
-
-        """
         self.num_layers = len(layer_dims)
         self.dimensions = layer_dims
         self.biases = [np.zeros((y, 1)) for y in layer_dims[1:]]
-        self.weights = [np.random.randn(y, x) * 0.01 for x, y in zip(layer_dims[:-1], layer_dims[1:])]
+        self.weights = [np.random.randn(y, x) for x, y in zip(layer_dims[:-1], layer_dims[1:])]
 
-    def predict(self, a):
-        for b, w in zip(self.biases, self.weights):
-            a = sigmoid(np.dot(w, a) + b)
-        return a
+    def labelize(self, data):
+        """Tranform a matrix (where each column is a data) into an list that contains the argmax of each item."""
+        return np.argmax(data, axis=0)
 
-    def train(self, training_data, epochs, mini_batch_size, learning_rate, test_data=None, cost_function='logistic_regression', sgd=False):
+    def train(self, training_data, epochs, mini_batch_size, learning_rate, test_data=None):
+        """
+        Takes the inputs and in each epoch - shuffles them, splits them into mini batches
+        does the forward prop, calculates the gradients, and updates the weights.
+        """
         if test_data:
             n_test = len(test_data)
         n = len(training_data)
+        # Change the shape of the test data
+        test_x, test_y = map(list, zip(*test_data))
+        test_x = np.reshape(test_x, (n_test, self.dimensions[0])).T
+        test_y = np.reshape(test_y, (n_test, self.dimensions[-1])).T
+        test_labels = self.labelize(test_y)
+        train_x, train_y = map(list, zip(*training_data))
+        train_x = np.reshape(train_x, (n, self.dimensions[0])).T
+        train_y = np.reshape(train_y, (n, self.dimensions[-1])).T
+        train_labels = self.labelize(train_y)
+        # Start the training
         for j in xrange(epochs):
             random.shuffle(training_data)
             mini_batches = [training_data[k:k + mini_batch_size] for k in xrange(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
                 x, y = map(list, zip(*mini_batch))
-                # It is important to match the diemensions in while vectorizing the data.
-                x = np.reshape(x, (self.dimensions[0], mini_batch_size))
-                y = np.reshape(y, (self.dimensions[-1], mini_batch_size))
-                if sgd is True:
-                    final_activation = self.update_mini_batch(mini_batch, learning_rate, cost_function)
-                    final_activation = np.reshape(final_activation, y.shape)
-                else:
-                    final_activation, activation_cache, linear_cache = self.forward_propagation(x, learning_rate)
-                    gradients = self.backward_propagation(
-                        final_activation,
-                        y, activation_cache, linear_cache, cost_function=cost_function)
-                    self.update_parameters(gradients, learning_rate, mini_batch_size)
-            if j % 10 == 0:
-                cost = self.compute_cost(final_activation, y, cost_function)  # Used for gradient checking
-                print "Cost after epoch %i: %f" % (j, cost)
-            if test_data:
-                print "Epoch {0}: {1} / {2}".format(
-                    j, self.evaluate(test_data), n_test)
+                x = np.reshape(x, (mini_batch_size, self.dimensions[0])).T
+                y = np.reshape(y, (mini_batch_size, self.dimensions[-1])).T
+                # Forward Propagation
+                final_activation, activation_cache, linear_cache = self.forward_propagation(x, learning_rate)
 
-    def update_mini_batch(self, mini_batch, learning_rate, cost_function):
-        db = [np.zeros(b.shape) for b in self.biases]
-        dw = [np.zeros(w.shape) for w in self.weights]
-        activation_cache = []
-        for x, y in mini_batch:
-            dwi, dbi, final_activation = self.sgd(x, y, cost_function)
-            db = [old_db + ndb for old_db, ndb in zip(db, dbi)]
-            dw = [old_dw + ndw for old_dw, ndw in zip(dw, dwi)]
-            activation_cache.append(final_activation)
-        self.weights = [w - (learning_rate / len(mini_batch)) * nw
-                        for w, nw in zip(self.weights, dw)]
-        self.biases = [b - (learning_rate / len(mini_batch)) * nb
-                       for b, nb in zip(self.biases, db)]
-        return activation_cache
+                # Backward Prop
+                gradients = self.backward_propagation(final_activation, y, activation_cache, linear_cache)
 
-    def sgd(self, x, y, cost_function):
-        db = [np.zeros(b.shape) for b in self.biases]
-        dw = [np.zeros(w.shape) for w in self.weights]
-        activation = x
-        activation_cache = [x]
-        linear_cache = []
-        # Forward prop
-        for b, w in zip(self.biases, self.weights):
-            z = np.dot(w, activation) + b
-            linear_cache.append(z)
-            activation = sigmoid(z)
-            activation_cache.append(activation)
-        # Backward Prop
-        if cost_function == 'logistic_regression':
-            dal = -(np.divide(y, activation_cache[-1]) - np.divide(1 - y, 1 - activation_cache[-1]))
-        elif cost_function == 'mse':
-            dal = self.cost_derivative(activation_cache[-1], y)
-        for l in range(1, self.num_layers):
-            dzl = self.sigmoid_backward(dal, linear_cache[-l])
-            dw[-l] = np.dot(dzl, activation_cache[-l - 1].transpose())
-            db[-l] = dzl
-            dal = np.dot(self.weights[-l].transpose(), dzl)
-        return (dw, db, activation_cache[-1])
+                # Update weights
+                self.update_parameters(gradients, learning_rate, mini_batch_size)
 
-    def evaluate(self, test_data):
+                # Print the training error and the test error
+            if j % 10 == 0 and j > 0:
+                print "Error percentage after %s iterations" % j
+                print "The error on the training set is {0:.2f}%".format(self.evaluate(
+                    self.labelize(self.forward_propagation(train_x, learning_rate)[0]), train_labels) * 100)
+                print "The error on the test set is {0:.2f}%".format(self.evaluate(
+                    self.labelize(self.forward_propagation(test_x, learning_rate)[0]), test_labels
+                ) * 100)
+
+    def evaluate(self, a, y):
         """Return the number of test inputs for which the neural
         network outputs the correct result. Note that the neural
         network's output is assumed to be the index of whichever
         neuron in the final layer has the highest activation."""
-        test_results = [(np.argmax(self.predict(x)), y)
-                        for (x, y) in test_data]
-        return sum(int(x == y) for (x, y) in test_results)
-
-    def compute_cost(self, a, y, cost_function):
-        if cost_function == 'logistic_regression':
-            cost = -np.mean(y * np.log(a) + np.log(1 - y) * np.log(1 - a))
-        elif cost_function == 'mse':
-            cost = -np.mean(np.power(a - y, 2)) / 2
-        return cost
-
-    def cost_derivative(self, output_activations, y):
-        return (output_activations - y)
+        return (np.sum(a != y) / (len(a) + 0.0))
 
     def forward_propagation(self, x, learning_rate):
+        """
+        Take the input through forward propagation and cache the linear output
+        and sigmoid output to use it in backward prop
+        """
         activation_cache = [x]
-        a = x
         linear_cache = []
+        a = x
         for w, b in zip(self.weights, self.biases):
+            # print a.shape, w.shape, b.shape
             z = np.dot(w, a) + b
             linear_cache.append(z)
             a = sigmoid(z)
             activation_cache.append(a)
         return (a, activation_cache, linear_cache)
 
-    def sigmoid_backward(self, da, cache):
-        z = cache
-        dz = da * sigmoid_prime(z)
-        return dz
-
-    def backward_propagation(self, final_activation, y, activation_cache, linear_cache, cost_function):
+    def backward_propagation(self, final_activation, y, activation_cache, linear_cache):
         dw = [np.zeros(w.shape) for w in self.weights]
         db = [np.zeros(b.shape) for b in self.biases]
-        if cost_function == 'logistic_regression':
-            dal = -(np.divide(y, final_activation) - np.divide(1 - y, 1 - final_activation))
-        elif cost_function == 'mse':
-            dal = self.cost_derivative(activation_cache[-1], y)
+        dal = self.cost_derivative(activation_cache[-1], y)
         for l in range(1, self.num_layers):
             dzl = self.sigmoid_backward(dal, linear_cache[-l])
-            dw[-l] = np.dot(dzl, activation_cache[-l - 1].transpose())
+            dw[-l] = np.dot(dzl, activation_cache[-l - 1].T)
             db[-l] = np.sum(dzl, axis=1, keepdims=True)
             dal = np.dot(self.weights[-l].transpose(), dzl)
         return (dw, db)
+
+    def sigmoid_backward(self, da, cache):
+        z = cache
+        dz = np.multiply(da, sigmoid_prime(z))
+        return dz
+
+    def cost_derivative(self, output_activations, y):
+        return (output_activations - y)
 
     def update_parameters(self, gradients, learning_rate, mini_batch_size):
         dw, db = gradients
         self.weights = [w - (learning_rate / mini_batch_size) * dw_l for w, dw_l in zip(self.weights, dw)]
         self.biases = [b - (learning_rate / mini_batch_size) * db_l for b, db_l in zip(self.biases, db)]
+
