@@ -32,6 +32,7 @@ class Network(object):
         Takes the inputs and in each epoch - shuffles them, splits them into mini batches
         does the forward prop, calculates the gradients, and updates the weights.
         """
+        print "Loading Shit load of data, this might take a while..."
         if test_data:
             n_test = len(test_data)
         n = len(training_data)
@@ -64,9 +65,9 @@ class Network(object):
                 # Print the training error and the test error
             if j % 10 == 0 and j > 0:
                 print "Error percentage after %s iterations" % j
-                print "The error on the training set is {0:.2f}%".format(self.evaluate(
+                print "\tThe error on the training set is {0:.2f}%\n".format(self.evaluate(
                     self.labelize(self.forward_propagation(train_x, learning_rate)[0]), train_labels) * 100)
-                print "The error on the test set is {0:.2f}%".format(self.evaluate(
+                print "\tThe error on the test set is {0:.2f}%\n".format(self.evaluate(
                     self.labelize(self.forward_propagation(test_x, learning_rate)[0]), test_labels
                 ) * 100)
 
